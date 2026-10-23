@@ -1,0 +1,1 @@
+function f(a){const s=a[0]||'';for(let l=s.length;l>0;l--){for(let i=0;i+l<=s.length;i++){const t=s.slice(i,i+l);if(a.every(x=>x.includes(t))){return t}}}return''}console.log(f(process.argv.slice(2)))
