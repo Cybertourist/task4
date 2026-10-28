@@ -8,13 +8,12 @@ EUR_TO_USD = 1.2
 MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
 
-# Only the date part matters, so each pattern extracts year, month and day and ignores the time.
 DATE_PATTERNS = [
-    (r"(\d{4})-(\d{1,2})-(\d{1,2})", "ymd"),               # 2025-12-23T04:36:49, 2025-08-17 12:25
-    (r"(\d{1,2})\.(\d{1,2})\.(\d{4})", "dmy"),             # 30.06.2025 11:49:49
-    (r"(\d{1,2})/(\d{1,2})/(\d{2,4})", "mdy"),             # 04/29/26,13:42 (US order)
-    (r"(\d{1,2})-([A-Za-z]+)-(\d{4})", "dMy"),             # 10-Dec-2025, 15-September-2025
-    (r"[A-Za-z]{3} ([A-Za-z]{3})\s+(\d{1,2}) [\d:]+ (\d{4})", "Mdy"),  # Fri Apr 10 15:32:26 2026
+    (r"(\d{4})-(\d{1,2})-(\d{1,2})", "ymd"),
+    (r"(\d{1,2})\.(\d{1,2})\.(\d{4})", "dmy"),
+    (r"(\d{1,2})/(\d{1,2})/(\d{2,4})", "mdy"),
+    (r"(\d{1,2})-([A-Za-z]+)-(\d{4})", "dMy"),
+    (r"[A-Za-z]{3} ([A-Za-z]{3})\s+(\d{1,2}) [\d:]+ (\d{4})", "Mdy"),
 ]
 
 
@@ -40,7 +39,6 @@ def parse_date(text):
 
 
 def parse_price_usd(text):
-    """'$ 35', '30.0USD', 'EUR37.50', '29.00$', '€22¢25', '46$99¢' -> price in dollars."""
     rate = EUR_TO_USD if ("EUR" in text or "€" in text) else 1.0
     if "¢" in text:
         dollars, cents = re.findall(r"\d+", text)
@@ -56,21 +54,23 @@ def load_store(folder):
     users = pd.read_csv(folder / "users.csv", dtype=str, keep_default_na=False)
     with open(folder / "books.yaml", encoding="utf-8") as f:
         books = pd.DataFrame(yaml.safe_load(f))
-    books.columns = [c.lstrip(":") for c in books.columns]   # Ruby-style keys ':id' -> 'id'
+    books.columns = [c.lstrip(":") for c in books.columns]
+    books["year"] = pd.to_numeric(books["year"], errors="coerce").astype("Int64")
+    books["publisher"] = books["publisher"].fillna("")
 
     orders = orders.drop_duplicates()
+    orders["shipping"] = orders["shipping"].str.strip().replace({"": pd.NA, "NULL": pd.NA})
     orders["date"] = orders["timestamp"].map(parse_date)
     orders["paid_price"] = (orders["quantity"] * orders["unit_price"].map(parse_price_usd)).round(2)
 
     users["id"] = users["id"].astype(int)
-    users["phone"] = users["phone"].str.replace(r"\D", "", regex=True)  # (313) 970-1817 -> 3139701817
+    users["phone"] = users["phone"].str.replace(r"\D", "", regex=True)
 
     books["authors"] = books["author"].map(lambda a: frozenset(x.strip() for x in a.split(",")))
     return orders, users, books
 
 
 def real_user_map(users):
-    """Two records belong to one person if at most one of name/address/phone/email differs."""
     parent = {uid: uid for uid in users["id"]}
 
     def find(x):
